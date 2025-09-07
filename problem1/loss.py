@@ -85,7 +85,7 @@ class DetectionLoss(nn.Module):
                 # match
                 matched_labels, matched_boxes, pos_mask, neg_mask = match_anchors_to_targets(
                     anchors_s, gt_boxes, gt_labels,
-                    pos_threshold=0.5, neg_threshold=0.3
+                    pos_threshold=0.5, neg_threshold=0.4   # reduce ignore range
                 )
                 # matched_labels: [N] with 0=bg, 1..C = classes+1
                 # matched_boxes:  [N,4] (x1,y1,x2,y2)
@@ -104,7 +104,7 @@ class DetectionLoss(nn.Module):
 
                 # Hard Negative Mining (select top-k negatives)
                 sel_neg_idx = self.hard_negative_mining(
-                    obj_loss_all.detach(), pos_idx, neg_idx, ratio=3
+                    obj_loss_all.detach(), pos_idx, neg_idx, ratio=5  #from 3 to 5  reduce false positive
                 )
 
                 # objectness loss = positives + selected negatives

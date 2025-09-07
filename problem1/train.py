@@ -69,7 +69,7 @@ def train_epoch(model, dataloader, criterion, optimizer, device, anchors_device)
 def main():
     # ---------------- Configuration ----------------
     batch_size = 16
-    learning_rate = 0.001
+    learning_rate = 0.003  # increase learning rate
 
     num_epochs = 50
 
@@ -100,9 +100,15 @@ def main():
     # Anchor configuration (per requirement)
     image_size = 224
     feature_map_sizes = [(56, 56), (28, 28), (14, 14)]
-    anchor_scales = [
-        [16, 24, 32],    # Scale 1 (56x56)
-        [48, 64, 96],    # Scale 2 (28x28)
+    # anchor_scales = [
+    #     [16, 24, 32],    # Scale 1 (56x56)
+    #     [48, 64, 96],    # Scale 2 (28x28)
+    #     [96, 128, 192],  # Scale 3 (14x14)
+    # ]
+
+    anchor_scales = [  #reduce S1 to make small obj more detactable
+        [12, 16, 20],    # Scale 1 (56x56)
+        [40, 56, 80],    # Scale 2 (28x28)
         [96, 128, 192],  # Scale 3 (14x14)
     ]
 
