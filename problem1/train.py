@@ -71,14 +71,14 @@ def main():
     batch_size = 16
     learning_rate = 0.001
 
-    num_epochs = 2
+    num_epochs = 50
 
 
     num_workers = 4
     pin_memory = True
     device = torch.device(
         "cuda" if torch.cuda.is_available()
-        else "mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+        # else "mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
         else "cpu"
     )
 

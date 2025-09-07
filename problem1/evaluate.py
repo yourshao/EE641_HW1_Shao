@@ -204,9 +204,9 @@ def decode_predictions(predictions: List[torch.Tensor],
 
 
         # Split
-        loc = pred_s[..., 0:4]  # [B,N,4] (tx,ty,tw,th)
-        obj = pred_s[..., 4]  # [B,N]
-        cls = pred_s[..., 5:5 + num_classes]  # [B,N,C]
+        loc = pred_s[..., 0:4].contiguous()  # [B,N,4] (tx,ty,tw,th)
+        obj = pred_s[..., 4].contiguous()  # [B,N]
+        cls = pred_s[..., 5:5 + num_classes].contiguous()  # [B,N,C]
 
         # Anchors
         anc = anch_s.to(device)  # [N,4]
@@ -470,7 +470,7 @@ def main():
     # ---------- Configuration ----------
     device = torch.device(
         "cuda" if torch.cuda.is_available()
-        else "mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+        # else "mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
         else "cpu"
     )
     image_size = 224

@@ -69,9 +69,12 @@ class DetectionLoss(nn.Module):
                 "Anchors count must match predictions at this scale"
 
             # split predictions
-            pred_loc = pred_s[..., 0:4]                 # [B, N, 4] (tx,ty,tw,th)
-            pred_obj = pred_s[..., 4]                   # [B, N]
-            pred_cls = pred_s[..., 5:5 + C]             # [B, N, C]
+            pred_loc = pred_s[..., 0:4].contiguous()              # [B, N, 4] (tx,ty,tw,th)
+            pred_obj = pred_s[..., 4].contiguous()               # [B, N]
+            pred_cls = pred_s[..., 5:5 + C].contiguous()             # [B, N, C]
+
+            assert anchors_s.shape[0] == H * W * A_per, \
+                f"Anchors {anchors_s.shape[0]} != H*W*A {H}*{W}*{A_per}={H*W*A_per}"
 
             # ---- per-image matching & loss ----
             for b in range(B):
