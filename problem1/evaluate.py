@@ -475,10 +475,10 @@ def main():
     )
     image_size = 224
     feature_map_sizes = [(56, 56), (28, 28), (14, 14)]
-    anchor_scales = [
-        [16, 24, 32],  # Scale 1
-        [48, 64, 96],  # Scale 2
-        [96, 128, 192],  # Scale 3
+    anchor_scales = [  #reduce S1 to make small obj more detactable
+        [12, 16, 20],    # Scale 1 (56x56)
+        [40, 56, 80],    # Scale 2 (28x28)
+        [96, 128, 192],  # Scale 3 (14x14)
     ]
     conf_thresh = 0.3
     nms_iou = 0.5
