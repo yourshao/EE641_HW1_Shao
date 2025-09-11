@@ -2,50 +2,64 @@ import torch
 import torch.nn as nn
 
 
-
 class MultiScaleDetector(nn.Module):
-    def __init__(self, num_classes=3, num_anchors=3):
-        """
-        Initialize the multi-scale detector.
+    """
+    Backbone (224x224 输入)：
+      Block1: Conv(3->32, s=1) -> BN -> ReLU -> Conv(32->64, s=2) -> BN -> ReLU   -> 112x112
+      Block2: Conv(64->128, s=2) -> BN -> ReLU                                     -> 56x56   (Scale 1)
+      Block3: Conv(128->256, s=2) -> BN -> ReLU                                    -> 28x28   (Scale 2)
+      Block4: Conv(256->512, s=2) -> BN -> ReLU                                    -> 14x14   (Scale 3)
 
-        Args:
-            num_classes: Number of object classes (not including background)
-            num_anchors: Number of anchors per spatial location
-        """
+    Detection Head（每个尺度）：
+      3x3 Conv(通道不变, s=1) + BN + ReLU -> 1x1 Conv(输出 A*(5+C))
+    """
+    def __init__(self, num_classes=3, num_anchors=3):
         super().__init__()
         self.num_classes = num_classes
         self.num_anchors = num_anchors
-        self.pred_ch = num_anchors * (5 + num_classes)  # 4 bbox + 1 obj + C classes
+        self.pred_ch = num_anchors * (5 + num_classes)
+        #（可选）记录每个尺度对应的步幅
+        self.strides = [4, 8, 16]  # 224->56->28->14
 
-        # ---------------- Backbone (4 blocks) ----------------
-        # Block: Conv -> BN -> ReLU -> MaxPool(2x2, stride=2)
-        # 输入 [B,3,224,224] 经过四次下采样到 112/56/28/14
-        self.block1 = self._make_block(3,   64)   # -> [B,64,112,112]
-        self.block2 = self._make_block(64,  128)  # -> [B,128,56,56]  (Scale 1)
-        self.block3 = self._make_block(128, 256)  # -> [B,256,28,28]  (Scale 2)
-        self.block4 = self._make_block(256, 512)  # -> [B,512,14,14]  (Scale 3)
+        # -------- Backbone: stride=2 的卷积做下采样 --------
+        self.block1 = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+        )
+        self.block2 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+        )
+        self.block3 = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+        )
+        self.block4 = nn.Sequential(
+            nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+        )
 
-        # ---------------- Detection heads (per scale) ----------------
-        # 每个 head: 3x3 Conv(保持通道) -> 1x1 Conv(输出 num_anchors*(5+num_classes))
-        self.head_s1 = self._make_head(128)
-        self.head_s2 = self._make_head(256)
-        self.head_s3 = self._make_head(512)
+        # -------- Detection Heads: 3x3(保通道) -> 1x1(到 A*(5+C)) --------
+        def make_head(in_ch):
+            return nn.Sequential(
+                nn.Conv2d(in_ch, in_ch, kernel_size=3, stride=1, padding=1, bias=False),
+                nn.BatchNorm2d(in_ch),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(in_ch, self.pred_ch, kernel_size=1, stride=1, padding=0, bias=True),
+            )
+
+        self.head_s1 = make_head(128)  # 56x56
+        self.head_s2 = make_head(256)  # 28x28
+        self.head_s3 = make_head(512)  # 14x14
 
         self._init_weights()
-
-    def _make_block(self, in_ch, out_ch):
-        return nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-        )
-
-    def _make_head(self, in_ch):
-        return nn.Sequential(
-            nn.Conv2d(in_ch, in_ch, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(in_ch, self.pred_ch, kernel_size=1, stride=1, padding=0),
-        )
 
     def _init_weights(self):
         for m in self.modules():
@@ -59,22 +73,18 @@ class MultiScaleDetector(nn.Module):
 
     def forward(self, x):
         """
-        Args:
-            x: [B, 3, 224, 224]
-
-        Returns:
-            List[Tensor]: [p1, p2, p3]
-              - p1: [B, A*(5+C), 56, 56]   (Scale 1)
-              - p2: [B, A*(5+C), 28, 28]   (Scale 2)
-              - p3: [B, A*(5+C), 14, 14]   (Scale 3)
+        x: [B, 3, 224, 224]
+        return:
+          p1: [B, A*(5+C), 56, 56]
+          p2: [B, A*(5+C), 28, 28]
+          p3: [B, A*(5+C), 14, 14]
         """
-        x = self.block1(x)     # [B,64,112,112]
-        f1 = self.block2(x)    # [B,128,56,56]   -> Scale 1
-        f2 = self.block3(f1)   # [B,256,28,28]   -> Scale 2
-        f3 = self.block4(f2)   # [B,512,14,14]   -> Scale 3
+        x = self.block1(x)   # [B, 64, 112,112]
+        f1 = self.block2(x)  # [B,128, 56, 56] -> Scale 1
+        f2 = self.block3(f1) # [B,256, 28, 28] -> Scale 2
+        f3 = self.block4(f2) # [B,512, 14, 14] -> Scale 3
 
-        p1 = self.head_s1(f1)  # [B, A*(5+C), 56, 56]
-        p2 = self.head_s2(f2)  # [B, A*(5+C), 28, 28]
-        p3 = self.head_s3(f3)  # [B, A*(5+C), 14, 14]
-
+        p1 = self.head_s1(f1)
+        p2 = self.head_s2(f2)
+        p3 = self.head_s3(f3)
         return [p1, p2, p3]
