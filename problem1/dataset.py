@@ -1,5 +1,4 @@
 import os
-
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -14,13 +13,13 @@ class ShapeDetectionDataset(Dataset):
 
         Args:
             image_dir: Path to directory containing images
-            annotation_file: Path to COCO-style JSON annotations
+            annotation_file: Path to JSON annotations (bbox as [x1,y1,x2,y2])
             transform: Optional transform to apply to images
         """
         self.image_dir = image_dir
         self.transform = transform
 
-        # 读取 COCO JSON
+        # 读取 JSON
         with open(annotation_file, "r") as f:
             coco = json.load(f)
 
@@ -33,7 +32,6 @@ class ShapeDetectionDataset(Dataset):
             if name in name2idx:
                 self.catid_to_idx[cid] = name2idx[name]
         # 若没有名字映射，则假定 category_id 已经是 0/1/2
-        # （在 __getitem__ 时若找不到映射，会尝试 int(category_id)）
 
         # 建立 image_id -> 标注列表
         anns_by_img = {}
@@ -54,27 +52,34 @@ class ShapeDetectionDataset(Dataset):
             boxes = []
             labels = []
             for a in anns_by_img.get(img_id, []):
-                # COCO: bbox = [x, y, w, h]
-                x, y, w, h = a["bbox"]
-                x1 = float(x)
-                y1 = float(y)
-                x2 = float(x) + float(w)
-                y2 = float(y) + float(h)
+                # ==== 这里改为读取 xyxy ====
+                bx = a["bbox"]
+                if not (isinstance(bx, (list, tuple)) and len(bx) == 4):
+                    continue  # 跳过异常框
 
-                # clamp 到图像范围（稳妥）
+                x1, y1, x2, y2 = map(float, bx)
+
+                # 若出现顺序颠倒，做纠正（稳妥处理）
+                if x2 < x1:
+                    x1, x2 = x2, x1
+                if y2 < y1:
+                    y1, y2 = y2, y1
+
+                # clamp 到图像范围
                 x1 = max(0.0, min(x1, width - 1))
                 y1 = max(0.0, min(y1, height - 1))
                 x2 = max(0.0, min(x2, width - 1))
                 y2 = max(0.0, min(y2, height - 1))
 
+                # 跳过退化框
                 if x2 <= x1 or y2 <= y1:
-                    continue  # 跳过退化框
+                    continue
 
+                # 处理类别
                 cat = a["category_id"]
                 if cat in self.catid_to_idx:
                     label = self.catid_to_idx[cat]
                 else:
-                    # 尝试直接转成 0/1/2
                     label = int(cat)
 
                 boxes.append([x1, y1, x2, y2])
@@ -92,19 +97,9 @@ class ShapeDetectionDataset(Dataset):
             )
 
     def __len__(self):
-        """Return the total number of samples."""
         return len(self.samples)
 
     def __getitem__(self, idx):
-        """
-        Return a sample from the dataset.
-
-        Returns:
-            image: Tensor of shape [3, H, W]
-            targets: Dict containing:
-                - boxes: Tensor of shape [N, 4] in [x1, y1, x2, y2] format
-                - labels: Tensor of shape [N] with class indices (0, 1, 2)
-        """
         sample = self.samples[idx]
 
         # 读图（PIL -> RGB）

@@ -228,18 +228,18 @@ def decode_predictions(predictions: List[torch.Tensor],
         obj_sig = torch.sigmoid(obj)  # [B,N]
         cls_prob = F.softmax(cls, dim=-1)  # [B,N,C]
         # For each class, compute combined score and threshold
-        for b in range(B):
-            for c in range(num_classes):
-                scores_c = obj_sig[b] * cls_prob[b, :, c]  # [N]
-                keep = scores_c >= conf_thresh
-                if keep.any():
-                    out_per_image[b]["boxes"].append(boxes[b][keep])
-                    out_per_image[b]["scores"].append(scores_c[keep])
-                    out_per_image[b]["labels"].append(
-                        torch.full((int(keep.sum().item()),), c, device=device, dtype=torch.long))
-                    out_per_image[b]["scale_ids"].append(
-                        torch.full((int(keep.sum().item()),), s_id, device=device, dtype=torch.long))
+        comb = obj_sig.unsqueeze(-1) * cls_prob      # [B,N,C]
+        best_scores, best_cls = comb.max(dim=-1)     # [B,N], [B,N]
 
+        for b in range(B):
+            keep = best_scores[b] >= conf_thresh
+            if keep.any():
+                out_per_image[b]["boxes"].append(boxes[b][keep])
+                out_per_image[b]["scores"].append(best_scores[b][keep].float())
+                out_per_image[b]["labels"].append(best_cls[b][keep].to(torch.long))
+                out_per_image[b]["scale_ids"].append(
+                    torch.full((int(keep.sum()),), s_id, dtype=torch.long, device=device)
+                )
     # Concatenate lists into tensors
     for b in range(B):
         if len(out_per_image[b]["boxes"]) == 0:
@@ -475,13 +475,21 @@ def main():
     )
     image_size = 224
     feature_map_sizes = [(56, 56), (28, 28), (14, 14)]
-    anchor_scales = [  #reduce S1 to make small obj more detactable
-        [12, 16, 20],    # Scale 1 (56x56)
-        [40, 56, 80],    # Scale 2 (28x28)
+
+
+    anchor_scales = [
+        [16, 24, 32],    # Scale 1 (56x56)
+        [48, 64, 96],    # Scale 2 (28x28)
         [96, 128, 192],  # Scale 3 (14x14)
     ]
-    conf_thresh = 0.3
-    nms_iou = 0.5
+
+    # anchor_scales = [  #reduce S1 to make small obj more detactable
+    #     [8, 12, 16],    # Scale 1 (56x56)
+    #     [40, 56, 80],    # Scale 2 (28x28)
+    #     [96, 128, 192],  # Scale 3 (14x14)
+    # ]
+    conf_thresh = 0.5
+    nms_iou = 0.6
     iou_ap = 0.5
 
     # Paths (match your train.py)
