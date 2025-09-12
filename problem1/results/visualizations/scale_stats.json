@@ -1,17 +1,17 @@
 {
   "scale_1": {
-    "small": 201,
+    "small": 196,
     "medium": 0,
     "large": 0
   },
   "scale_2": {
     "small": 0,
-    "medium": 50,
-    "large": 4
+    "medium": 84,
+    "large": 5
   },
   "scale_3": {
     "small": 0,
-    "medium": 141,
-    "large": 202
+    "medium": 119,
+    "large": 201
   }
 }
