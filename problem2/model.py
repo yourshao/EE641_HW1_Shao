@@ -4,9 +4,7 @@ import torch.nn.functional as F
 from typing import Tuple
 
 
-# ------------------------------
-# 基础块：Conv -> BN -> ReLU
-# ------------------------------
+# ------------------------------conv -> BN -> ReLU ------------------------------
 def conv_block(in_ch: int, out_ch: int, k: int = 3, s: int = 1, p: int = 1) -> nn.Module:
     return nn.Sequential(
         nn.Conv2d(in_ch, out_ch, kernel_size=k, stride=s, padding=p, bias=False),
@@ -15,9 +13,7 @@ def conv_block(in_ch: int, out_ch: int, k: int = 3, s: int = 1, p: int = 1) -> n
     )
 
 
-# ------------------------------
-# Encoder
-# ------------------------------
+# ------------------------------ Encoder ------------------------------
 class Encoder(nn.Module):
     """
     input:  [B,C,128,128]
@@ -45,9 +41,7 @@ class Encoder(nn.Module):
         return f1, f2, f3, f4
 
 
-# ------------------------------
-# Heatmap Head
-# ------------------------------
+# ------------------------------ Heatmap Head ------------------------------
 class HeatmapHead(nn.Module):
     def __init__(self, num_keypoints: int):
         super().__init__()
@@ -80,9 +74,7 @@ class HeatmapHead(nn.Module):
         return heatmaps
 
 
-# ------------------------------
-# Regression Head
-# ------------------------------
+# ------------------------------Regression Head------------------------------
 class RegressionHead(nn.Module):
     def __init__(self, num_keypoints: int):
         super().__init__()
@@ -101,9 +93,7 @@ class RegressionHead(nn.Module):
         return coords
 
 
-# ------------------------------
-# HeatmapNet (独立模型)
-# ------------------------------
+# ------------------------------ HeatmapNet ------------------------------
 class HeatmapNet(nn.Module):
     def __init__(self, num_keypoints: int = 5, in_channels: int = 1):
         super().__init__()
@@ -115,9 +105,7 @@ class HeatmapNet(nn.Module):
         return self.hm_head(f1, f2, f3, f4)
 
 
-# ------------------------------
-# RegressionNet (独立模型)
-# ------------------------------
+# ------------------------------RegressionNet  -----------------------------
 class RegressionNet(nn.Module):
     def __init__(self, num_keypoints: int = 5, in_channels: int = 1):
         super().__init__()

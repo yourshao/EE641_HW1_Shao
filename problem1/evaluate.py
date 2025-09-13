@@ -96,24 +96,7 @@ def compute_ap(predictions, ground_truths, iou_threshold=0.5):
 # ------------------------ Visualization ------------------------
 
 def visualize_detections(image, predictions, ground_truths, save_path):
-    """
-    Visualize predictions and ground truth boxes.
 
-    Args:
-        image: PIL.Image.Image or str path
-        predictions: Dict with:
-            {
-                "boxes": Tensor[N,4],
-                "scores": Tensor[N],
-                "labels": Tensor[N],   # 0..C-1
-            }
-        ground_truths: Dict with:
-            {
-                "boxes": Tensor[M,4],
-                "labels": Tensor[M],
-            }
-        save_path: path to save annotated image
-    """
     if isinstance(image, str):
         img = Image.open(image).convert("RGB")
     elif isinstance(image, Image.Image):

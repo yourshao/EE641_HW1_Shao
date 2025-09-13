@@ -118,20 +118,16 @@ def main():
     PROBLEMS_ROOT = os.path.dirname(HERE)                      # .../problems
     DATA_ROOT = os.path.join(PROBLEMS_ROOT, "datasets", "keypoints")
 
-    # 数据与标注
     train_img_dir = os.path.join(DATA_ROOT, "train")
     val_img_dir   = os.path.join(DATA_ROOT, "val")
     train_ann = os.path.join(DATA_ROOT, "train_annotations.json")
     val_ann   = os.path.join(DATA_ROOT, "val_annotations.json")
 
-    # Heatmap loaders
     train_ds_hm = KeypointDataset(train_img_dir, train_ann, output_type="heatmap", heatmap_size=64, sigma=2.0)
     val_ds_hm   = KeypointDataset(val_img_dir,   val_ann,   output_type="heatmap", heatmap_size=64, sigma=2.0)
 
     train_loader_hm = DataLoader(train_ds_hm, batch_size=bs, shuffle=True,  num_workers=2, pin_memory=(device.type=="cuda"))
     val_loader_hm   = DataLoader(val_ds_hm,   batch_size=bs, shuffle=False, num_workers=2, pin_memory=(device.type=="cuda"))
-
-    # Regression loaders
     train_ds_rg = KeypointDataset(train_img_dir, train_ann, output_type="regression")
     val_ds_rg   = KeypointDataset(val_img_dir,   val_ann,   output_type="regression")
 

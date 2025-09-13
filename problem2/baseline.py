@@ -12,12 +12,9 @@ from dataset import KeypointDataset
 from model import HeatmapNet, RegressionNet
 from evaluate import extract_keypoints_from_heatmaps, visualize_predictions
 
-# --------------------- 轻量训练（用于消融） ---------------------
+
 def _train_simple(model, train_loader, val_loader, epochs=5, device=None):
-    """
-    仅用于消融的轻量训练循环（不保存 .pth）。
-    Heatmap: 目标是热力图 -> MSE；Regression: 目标是坐标 -> MSE。
-    """
+
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     criterion = nn.MSELoss()
@@ -40,7 +37,7 @@ def _train_simple(model, train_loader, val_loader, epochs=5, device=None):
             loss.backward()
             opt.step()
 
-        # val（与训练同一目标）
+        # val
         model.eval()
         loss_sum, n = 0.0, 0
         with torch.no_grad():
@@ -62,16 +59,11 @@ def _train_simple(model, train_loader, val_loader, epochs=5, device=None):
     return model
 
 
-# --------------------- 模型变体：去掉 skip ---------------------
+# --------------------- skip skip ---------------------
 class HeatmapNetNoSkip(HeatmapNet):
-    """
-    去掉 skip 的变体：使用一套不依赖 concat 的解码器
-    编码器仍复用父类：f1:32@64x64, f2:64@32x32, f3:128@16x16, f4:256@8x8
-    解码：256@8x8 -> 128@16x16 -> 64@32x32 -> 32@64x64 -> K@64x64
-    """
+
     def __init__(self, num_keypoints=5):
         super().__init__(num_keypoints)
-        # 重新定义一套“无 skip”的解码器（注意通道数不再翻倍）
         self.deconv4_ns = nn.Sequential(
             nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2),  # 8 -> 16
             nn.BatchNorm2d(128),
@@ -90,27 +82,16 @@ class HeatmapNetNoSkip(HeatmapNet):
         self.final_ns = nn.Conv2d(32, self.num_keypoints, kernel_size=1)
 
     def forward(self, x):
-        # 复用父类编码器
-        f1, f2, f3, f4 = self.encoder(x)   # 我们只用 f4，不再 concat f3/f2
+        f1, f2, f3, f4 = self.encoder(x)
         x = self.deconv4_ns(f4)            # 256 -> 128, 8->16
         x = self.deconv3_ns(x)             # 128 -> 64, 16->32
         x = self.deconv2_ns(x)             # 64  -> 32, 32->64
         heatmaps = self.final_ns(x)        # 32  -> K,  64->64
         return heatmaps
 
-# --------------------- 消融实验 ---------------------
+# ---------------------  ablation_study---------------------
 def ablation_study(dataset_hint, epochs=5, batch_size=32):
-    """
-    消融项目：
-      1) 热力图分辨率: 32 / 64 / 128
-      2) 高斯 σ: 1.0 / 2.0 / 3.0 / 4.0
-      3) 是否使用 skip 连接: with / without
-    仅对 HeatmapNet 进行轻量训练与验证（记录 val MSE），保存到 results/ablation_results.json
-    并输出三张图：
-      - results/ablation_heatmap_resolution.png
-      - results/ablation_sigma.png
-      - results/ablation_skip.png
-    """
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     save_dir = Path(__file__).resolve().parent / "results"
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -120,7 +101,6 @@ def ablation_study(dataset_hint, epochs=5, batch_size=32):
     PROBLEMS_ROOT = os.path.dirname(HERE)                      # .../problems
     DATA_ROOT = os.path.join(PROBLEMS_ROOT, "datasets", "keypoints")
 
-    # 数据与标注
     train_img = os.path.join(DATA_ROOT, "train")
     val_img   = os.path.join(DATA_ROOT, "val")
     train_ann = os.path.join(DATA_ROOT, "train_annotations.json")
@@ -128,7 +108,7 @@ def ablation_study(dataset_hint, epochs=5, batch_size=32):
 
     results = {"heatmap_resolution": {}, "sigma": {}, "skip_connections": {}}
 
-    # 统一 DataLoader 构造器
+    # DataLoader
     def make_loaders(hm_size, sigma):
         train_ds = KeypointDataset(str(train_img), str(train_ann),
                                    output_type="heatmap", heatmap_size=hm_size, sigma=sigma)
@@ -146,7 +126,6 @@ def ablation_study(dataset_hint, epochs=5, batch_size=32):
         model = HeatmapNet(num_keypoints=5)
         model = _train_simple(model, train_ld, val_ld, epochs=epochs, device=device)
 
-        # 记录最优 val MSE（重跑一次 val）
         criterion, loss_sum, n = nn.MSELoss(), 0.0, 0
         model.eval()
         with torch.no_grad():
@@ -186,7 +165,7 @@ def ablation_study(dataset_hint, epochs=5, batch_size=32):
     model_without = HeatmapNetNoSkip(num_keypoints=5)
     model_without = _train_simple(model_without, train_ld, val_ld, epochs=epochs, device=device)
 
-    # 评估 val MSE
+    # val MSE
     def eval_mse(m, loader):
         crit, s, n = nn.MSELoss(), 0.0, 0
         m.eval()
@@ -203,12 +182,12 @@ def ablation_study(dataset_hint, epochs=5, batch_size=32):
     results["skip_connections"]["with"] = eval_mse(model_with, val_ld)
     results["skip_connections"]["without"] = eval_mse(model_without, val_ld)
 
-    # 保存 JSON
+    #  JSON
     with open(save_dir / "ablation_results.json", "w") as f:
         json.dump(results, f, indent=2)
     print(f"[Ablation] results saved to {save_dir / 'ablation_results.json'}")
 
-    # 简单可视化（折线/柱状）
+
     import matplotlib.pyplot as plt
 
     # (a) resolution
@@ -238,16 +217,10 @@ def ablation_study(dataset_hint, epochs=5, batch_size=32):
     return results
 
 
-# --------------------- 失败案例分析（用已训练权重） ---------------------
+# --------------------- analyze_failure_cases ---------------------
 @torch.no_grad()
 def analyze_failure_cases(models, test_loader, save_dir="results/failures", threshold=0.05):
-    """
-    识别并可视化失败样本：
-      A: Heatmap 成功 / Regression 失败
-      B: Regression 成功 / Heatmap 失败
-      C: 两者都失败
-    成败标准：各样本 K 点归一化误差（bbox 对角线）平均 <= threshold 视为成功。
-    """
+
     Path(save_dir).mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -262,23 +235,21 @@ def analyze_failure_cases(models, test_loader, save_dir="results/failures", thre
         B, K2 = targets.shape
         K = K2 // 2
         gts = targets.view(B, K, 2).clone()
-        gts[..., 0] *= 128.0                  # 映射到像素坐标
+        gts[..., 0] *= 128.0
         gts[..., 1] *= 128.0
 
-        # Heatmap -> coords (128 坐标)
         hm_out = hm(imgs)
         coords_hm = extract_keypoints_from_heatmaps(hm_out)
         Hm, Wm = hm_out.shape[-2:]
         coords_hm[..., 0] *= (128.0 / Wm)
         coords_hm[..., 1] *= (128.0 / Hm)
 
-        # Regression -> coords (128 坐标)
+        # Regression -> coords
         rg_out = rg(imgs).view(B, K, 2)
         coords_rg = rg_out.clone()
         coords_rg[..., 0] *= 128.0
         coords_rg[..., 1] *= 128.0
 
-        # 归一化误差（bbox 对角线）
         d_hm = torch.linalg.norm(coords_hm.cpu() - gts.cpu(), dim=-1)  # [B,K]
         d_rg = torch.linalg.norm(coords_rg.cpu() - gts.cpu(), dim=-1)
         xmin, _ = gts[..., 0].min(dim=1); xmax, _ = gts[..., 0].max(dim=1)
@@ -324,10 +295,9 @@ def analyze_failure_cases(models, test_loader, save_dir="results/failures", thre
     return summary
 
 
-# --------------------- 入口：只跑消融 / 失败分析 ---------------------
 if __name__ == "__main__":
-    RUN_ABLATION  = True   # 开 / 关 消融
-    RUN_FAILURES  = True   # 开 / 关 失败案例分析
+    RUN_ABLATION  = True
+    RUN_FAILURES  = True
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -343,18 +313,17 @@ if __name__ == "__main__":
     val_ann   = os.path.join(DATA_ROOT, "val_annotations.json")
 
     if RUN_ABLATION:
-        # 用一个 heatmap dataset 作为路径提示
         ds_hint = KeypointDataset(str(train_img), str(train_ann),
                                   output_type="heatmap", heatmap_size=64, sigma=2.0)
         ablation_study(ds_hint, epochs=5, batch_size=32)
 
     if RUN_FAILURES:
-        # 用回归标签作为 GT 坐标（[0,1]）
+
         val_reg = KeypointDataset(str(val_img), str(val_ann), output_type="regression")
         val_loader = DataLoader(val_reg, batch_size=32, shuffle=False,
                                 num_workers=2, pin_memory=(device.type == "cuda"))
 
-        # 加载已训练好的权重（由 train.py 产出）
+
         hm = HeatmapNet(num_keypoints=5)
         rg = RegressionNet(num_keypoints=5)
         hm.load_state_dict(torch.load(os.path.join(HERE, "results", "heatmap_model.pth"), map_location=device))

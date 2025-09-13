@@ -6,17 +6,9 @@ import torch
 
 
 def generate_anchors(feature_map_sizes, anchor_scales, image_size=224):
-    """
-    Generate anchors for multiple feature maps.
 
-    Args:
-        feature_map_sizes: List[(H, W)] for each feature map
-        anchor_scales: List[List[int/float]], side-length (pixels) for each fmap
-        image_size: Input image size (assume square, e.g., 224)
 
-    Returns:
-        anchors_list: List[Tensor], each [H*W*num_anchors, 4] (x1,y1,x2,y2)
-    """
+
     assert len(feature_map_sizes) == len(anchor_scales), \
         "feature_map_sizes and anchor_scales must have the same length"
 
@@ -58,16 +50,7 @@ def generate_anchors(feature_map_sizes, anchor_scales, image_size=224):
 
 
 def compute_iou(boxes1, boxes2):
-    """
-    Compute IoU between two sets of boxes.
 
-    Args:
-        boxes1: Tensor [N, 4] in (x1,y1,x2,y2)
-        boxes2: Tensor [M, 4] in (x1,y1,x2,y2)
-
-    Returns:
-        iou: Tensor [N, M]
-    """
     if boxes1.numel() == 0 or boxes2.numel() == 0:
         return boxes1.new_zeros((boxes1.shape[0], boxes2.shape[0]))
 
@@ -93,22 +76,6 @@ def compute_iou(boxes1, boxes2):
 
 def match_anchors_to_targets(anchors, target_boxes, target_labels,
                              pos_threshold=0.5, neg_threshold=0.3):
-    """
-    Match anchors to ground truth boxes for ONE image.
-
-    Args:
-        anchors: Tensor [A,4]
-        target_boxes: Tensor [T,4]
-        target_labels: Tensor [T] (class indices 0..C-1)
-        pos_threshold: IoU >= this -> positive
-        neg_threshold: IoU <  this -> negative (others are ignore)
-
-    Returns:
-        matched_labels: Tensor [A] (0=background, 1..C=classes+1)
-        matched_boxes:  Tensor [A,4]
-        pos_mask:       Bool Tensor [A]
-        neg_mask:       Bool Tensor [A]
-    """
     A = anchors.shape[0]
     device = anchors.device
 

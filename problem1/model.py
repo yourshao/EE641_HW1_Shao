@@ -4,24 +4,24 @@ import torch.nn as nn
 
 class MultiScaleDetector(nn.Module):
     """
-    Backbone (224x224 输入)：
+    Backbone (224x224 )：
       Block1: Conv(3->32, s=1) -> BN -> ReLU -> Conv(32->64, s=2) -> BN -> ReLU   -> 112x112
       Block2: Conv(64->128, s=2) -> BN -> ReLU                                     -> 56x56   (Scale 1)
       Block3: Conv(128->256, s=2) -> BN -> ReLU                                    -> 28x28   (Scale 2)
       Block4: Conv(256->512, s=2) -> BN -> ReLU                                    -> 14x14   (Scale 3)
 
-    Detection Head（每个尺度）：
-      3x3 Conv(通道不变, s=1) + BN + ReLU -> 1x1 Conv(输出 A*(5+C))
+    Detection Head：
+      3x3 Conv( s=1) + BN + ReLU -> 1x1 Conv( A*(5+C))
     """
     def __init__(self, num_classes=3, num_anchors=3):
         super().__init__()
         self.num_classes = num_classes
         self.num_anchors = num_anchors
         self.pred_ch = num_anchors * (5 + num_classes)
-        #（可选）记录每个尺度对应的步幅
+
         self.strides = [4, 8, 16]  # 224->56->28->14
 
-        # -------- Backbone: stride=2 的卷积做下采样 --------
+        # -------- Backbone: stride=2  --------
         self.block1 = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(32),
@@ -46,7 +46,7 @@ class MultiScaleDetector(nn.Module):
             nn.ReLU(inplace=True),
         )
 
-        # -------- Detection Heads: 3x3(保通道) -> 1x1(到 A*(5+C)) --------
+        # -------- Detection Heads: 3x3 -> 1x1(A*(5+C)) --------
         def make_head(in_ch):
             return nn.Sequential(
                 nn.Conv2d(in_ch, in_ch, kernel_size=3, stride=1, padding=1, bias=False),
