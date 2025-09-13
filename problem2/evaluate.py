@@ -264,8 +264,8 @@ def main():
     plot_pck_curves(pck_h, pck_r, save_path=str(vis_dir / "pck_comparison.png"))
     print(f"Saved PCK comparison curve to: {vis_dir / 'pck_comparison.png'}")
 
-    # ---------- Visualize predictions (前10张) ----------
-    # 分别存两张：heatmap 预测 vs GT、regression 预测 vs GT
+    # ---------- Visualize predictions ----------
+
     for i, (img, pred_h, pred_r, gt) in enumerate(sample_cache):
         visualize_predictions(
             image=img,

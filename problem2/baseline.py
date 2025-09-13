@@ -274,7 +274,7 @@ def analyze_failure_cases(models, test_loader, save_dir="results/failures", thre
             if bucket is not None and len(bucket[1]) < max_vis_per_cat:
                 visualize_predictions(
                     image=imgs_cpu[i],
-                    pred_keypoints=coords_hm[i].cpu().numpy(),  # 也可以改成回归预测
+                    pred_keypoints=coords_hm[i].cpu().numpy(),
                     gt_keypoints=gts[i].cpu().numpy(),
                     save_path=str(Path(save_dir) / f"{bucket[0]}_{idx:04d}_{i}.png"),
                 )
@@ -301,7 +301,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # 路径（datasets 在 problem2 的上一级）
+
     HERE = os.path.dirname(os.path.abspath(__file__))          # .../problems/problem2
     PROBLEMS_ROOT = os.path.dirname(HERE)                      # .../problems
     DATA_ROOT = os.path.join(PROBLEMS_ROOT, "datasets", "keypoints")
